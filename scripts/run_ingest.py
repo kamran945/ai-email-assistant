@@ -1,12 +1,15 @@
 import argparse
 import asyncio
 from typing import Optional
-from eaia.gmail import fetch_group_emails
-from eaia.main.config import get_config
 from langgraph_sdk import get_client
 import httpx
 import uuid
 import hashlib
+
+from src.gmail import fetch_group_emails
+
+# from src.email_assistant.config import get_config
+from src.email_assistant.configuration import Configuration
 
 
 async def main(
@@ -19,15 +22,14 @@ async def main(
     email: Optional[str] = None,
 ):
     if email is None:
-        email_address = get_config({"configurable": {}})["email"]
+        # email_address = get_config({"configurable": {}})["email"]
+        email_address = Configuration.email
     else:
         email_address = email
     if url is None:
         client = get_client(url="http://127.0.0.1:2024")
     else:
-        client = get_client(
-            url=url
-        )
+        client = get_client(url=url)
 
     # TODO: This really should be async
     for email in fetch_group_emails(
@@ -64,8 +66,8 @@ async def main(
 
         await client.runs.create(
             thread_id,
-            "main",
-            input={"email": email},
+            "email_assistant",
+            input={"email": email, "messages": []},
             multitask_strategy="rollback",
         )
 

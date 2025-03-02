@@ -2,6 +2,13 @@
 
 This repository is a personal fork of the [Executive AI Assistant (EAIA)](https://github.com/langchain-ai/executive-ai-assistant), an AI agent designed to function as an Executive Assistant. The purpose of this fork is to gain knowledge and expertise in the project by testing it and making slight tweaks while exploring its functionalities. This demonstrates my ability to implement and adapt similar AI-powered solutions for different users if required.
 
+## LangGraph Visualization
+
+This is a visualization of the LangGraph execution flow.
+
+![LangGraph Graph](graph_image.png)
+
+
 ### Executive AI Assistant
 
 Executive AI Assistant (EAIA) is an AI agent that attempts to do the job of an Executive Assistant (EA).
@@ -30,11 +37,14 @@ By working with this project, I aimed to:
 
 ## General Setup
 
-### Env
-
-1. Fork and then clone this repo. Note: make sure to fork it first, as in order to deploy this you will need your own repo.
-2. Create a Python virtualenv and activate it (e.g. `pyenv virtualenv 3.11.1 myenv`, `pyenv activate myenv`)
-3. Run `pip install -e .` to install dependencies and the package
+## ENV:
+-   Clone this repository `git clone <repository-url>`
+-   Initialize poetry with `poetry init -n`
+-   Run `poetry config virtualenvs.in-project true` so that virtualenv will be present in project directory
+-   Run `poetry env use <C:\Users\username\AppData\Local\Programs\Python\Python311\python.exe>` to create virtualenv in project (change username to your username)
+-   Run `poetry shell`
+-   Run `poetry install` to install requried packages
+-   Create `.env` file and insert all keys: see `.env.example` file
 
 ### Set up credentials
 
@@ -79,8 +89,7 @@ See [this section](#run-in-production--langgraph-cloud-) for instructions on how
 
 ### Set up AI Email Assistant locally
 
-1. Install development server `pip install -U "langgraph-cli[inmem]"`
-2. Run development server `langgraph dev`
+1. Run development server `langgraph dev`
 
 ### Ingest Emails Locally
 

@@ -1,18 +1,19 @@
 {
-  "python_version": "3.11",
-  "dependencies": [
-    "."
-  ],
-  "graphs": {
-    "main": "./eaia/main/graph.py:graph",
-    "cron": "./eaia/cron_graph.py:graph",
-    "general_reflection_graph": "./eaia/reflection_graphs.py:general_reflection_graph",
-    "multi_reflection_graph": "./eaia/reflection_graphs.py:multi_reflection_graph"
-  },
-  "store": {
-    "index": {
-      "embed": "openai:text-embedding-3-small",
-      "dims": 1536
-    }
+    "dockerfile_lines": [],
+    "graphs": {
+      "email_assistant": "./src/email_assistant/graph.py:email_assistant_workflow",
+      "general_reflection_graph": "./src/email_assistant/reflection_graphs.py:general_reflection_graph",
+      "multi_reflection_graph": "./src/email_assistant/reflection_graphs.py:multi_reflection_graph"
+    },
+    "store": {
+      "index": {
+        "embed": "huggingface:sentence-transformers/all-MiniLM-L6-v2",
+        "dims": 384
+      }
+    },
+    "python_version": "3.11",
+    "env": "./.env",
+    "dependencies": [
+      "."
+    ]
   }
-}

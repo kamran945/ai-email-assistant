@@ -1,10 +1,11 @@
 """Agent responsible for rewriting the email in a better tone."""
 
-from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
+from langgraph.func import task
 
-from eaia.schemas import State, ReWriteEmail
+from src.schemas import State, ReWriteEmail
 
-from eaia.main.config import get_config
+from src.email_assistant.configuration import Configuration
 
 
 rewrite_prompt = """You job is to rewrite an email draft to sound more like {name}.
@@ -30,14 +31,21 @@ Subject: {subject}
 {email_thread}"""
 
 
+# @task
 async def rewrite(state: State, config, store):
-    model = config["configurable"].get("model", "gpt-4o")
-    llm = ChatOpenAI(model=model, temperature=0)
+    print(f"\n{'='*50}\n rewrite \n{'='*50}\n")
+    configuration = Configuration.from_runnable_config(config=config)
+    model = configuration.rewrite_email_model
+    llm = ChatGroq(model=model, temperature=0)
+
     prev_message = state["messages"][-1]
     draft = prev_message.tool_calls[0]["args"]["content"]
+
     namespace = (config["configurable"].get("assistant_id", "default"),)
     result = await store.aget(namespace, "rewrite_instructions")
-    prompt_config = get_config(config)
+
+    prompt_config = configuration.config_yaml
+
     if result and "data" in result.value:
         _prompt = result.value["data"]
     else:
@@ -47,6 +55,7 @@ async def rewrite(state: State, config, store):
             {"data": prompt_config["rewrite_preferences"]},
         )
         _prompt = prompt_config["rewrite_preferences"]
+
     input_message = rewrite_prompt.format(
         email_thread=state["email"]["page_content"],
         author=state["email"]["from_email"],
@@ -60,6 +69,7 @@ async def rewrite(state: State, config, store):
         tool_choice={"type": "function", "function": {"name": "ReWriteEmail"}}
     )
     response = await model.ainvoke(input_message)
+
     tool_calls = [
         {
             "id": prev_message.tool_calls[0]["id"],
@@ -70,6 +80,12 @@ async def rewrite(state: State, config, store):
             },
         }
     ]
+
+    print()
+    print("TOOL CALL: ")
+    print(tool_calls)
+    print()
+
     prev_message = {
         "role": "assistant",
         "id": prev_message.id,

@@ -1,0 +1,75 @@
+triage_model: gemma2-9b-it
+
+# draft_response_model: mixtral-8x7b-32768
+draft_response_model: llama-3.1-8b-instant
+
+rewrite_email_model: mixtral-8x7b-32768
+
+find_meeting_model: mixtral-8x7b-32768
+
+reflection_model: llama-3.1-8b-instant
+
+email: ...
+full_name: John Doe
+name: John
+background: John Doe is an AI Engineer specializing in agentic applications using AI-Tech, langgraph and llamaindex. 
+schedule_preferences: By default, unless specified otherwise, you should make meetings 30 minutes long.
+background_preferences: 
+response_preferences:
+timezone: "PST"
+rewrite_preferences: |
+  John has a few rules for how he likes his emails to be written:
+
+  - "John likes to match the recipient's tone—formal if they write formally, casual if they write casually."
+  - "When coordinating with an assistant for scheduling, he tends to be more formal."
+  - "With people he knows well, he is more direct and to the point."
+  - "It’s important that no one realizes he’s using an assistant, so the emails should sound like they’re written by him, not an assistant."
+  - "When writing casually, he typically skips greetings and sign-offs, getting straight to the message."
+
+
+triage_no: |
+  - Ignore automated emails from services that frequently spam John.  
+  - Skip cold outreach from vendors trying to sell products—John is not interested.  
+  - Exclude emails with questions that others on the thread can answer.  
+    - John is often included in company threads (AI-Tech) but does not always need to respond.  
+    - The exception is if John is leading the conversation, which can usually be determined if he sent the last email.  
+  - Generally, filter out emails from Ramp, Rewatch, and Stripe.  
+  - Mute notifications for Google Docs comments.  
+  - Ignore automated calendar invitations. 
+
+triage_notify: |
+  - Notify John when a new Google Doc is shared with him.  
+    - Do NOT notify him about comments on existing documents, only brand-new ones.  
+  - Alert John about Docusign documents that require his signature.  
+    - These emails usually start with "Complete with Docusign."  
+    - If the document is already signed, do NOT notify him.  
+      - Signed emails start with "Completed: Complete with Docusign."  
+      - Only notify if the document still requires his signature.  
+  - Notify John about highly technical discussions related to AI-Tech.  
+    - While he may not always respond, he likes staying informed.  
+  - Flag emails where John has a clear action item from a previous conversation,  
+    such as adding people to a Slack channel.  
+
+triage_email: |
+  - Emails from clients that explicitly ask John a question.  
+  - Emails from clients where someone else has scheduled a meeting for John,  
+    and he has not yet responded to express his excitement.  
+  - Emails from clients or potential customers where John is the main driver of the conversation.  
+  - Emails from other AI-Tech team members that explicitly ask John a question.  
+  - Emails where John has been added to a thread with a customer and has not yet said hello.  
+  - Emails where John is introducing two people to each other.  
+    - Often, he connects founders with VCs for introductions.  
+    - If a founder is sending John a deck to forward, he should respond.  
+    - If John has already introduced the two parties, he should only respond if explicitly asked a question.  
+  - Emails from clients trying to set up a meeting with John.  
+  - Any direct emails from John's lawyers (Goodwin Law).  
+  - Any direct emails related to the AI-Tech board.  
+  - Emails about AI-Tech winning an award or being invited to a legitimate event.  
+  - Emails from people with whom John has a pre-existing relationship.  
+    - If they mention meeting him before or reference a past event/conversation, he should probably respond.  
+  - Emails from friends.  
+    - Even if they don't ask an explicit question, John should respond if it seems like something a good friend would reply to.  
+
+  Reminder: Automated calendar invites do NOT count as real emails.  
+
+memory: true

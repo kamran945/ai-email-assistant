@@ -16,9 +16,9 @@ from email.mime.text import MIMEText
 import email.utils
 
 from langchain_core.tools import tool
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 
-from eaia.schemas import EmailData
+from src.schemas import EmailData
 
 logger = logging.getLogger(__name__)
 _SCOPES = [
@@ -65,6 +65,14 @@ def get_credentials(
     return creds
 
 
+def parse_time(send_time: str):
+    try:
+        parsed_time = parser.parse(send_time)
+        return parsed_time
+    except (ValueError, TypeError) as e:
+        raise ValueError(f"Error parsing time: {send_time} - {e}")
+
+
 def extract_message_part(msg):
     """Recursively walk through the email parts to find message body."""
     if msg["mimeType"] == "text/plain":
@@ -81,88 +89,6 @@ def extract_message_part(msg):
             if body:
                 return body
     return "No message body available."
-
-
-def parse_time(send_time: str):
-    try:
-        parsed_time = parser.parse(send_time)
-        return parsed_time
-    except (ValueError, TypeError) as e:
-        raise ValueError(f"Error parsing time: {send_time} - {e}")
-
-
-def create_message(sender, to, subject, message_text, thread_id, original_message_id):
-    message = MIMEMultipart()
-    message["to"] = ", ".join(to)
-    message["from"] = sender
-    message["subject"] = subject
-    message["In-Reply-To"] = original_message_id
-    message["References"] = original_message_id
-    message["Message-ID"] = email.utils.make_msgid()
-    msg = MIMEText(message_text)
-    message.attach(msg)
-    raw = base64.urlsafe_b64encode(message.as_bytes())
-    raw = raw.decode()
-    return {"raw": raw, "threadId": thread_id}
-
-
-def get_recipients(
-    headers,
-    email_address,
-    addn_receipients=None,
-):
-    recipients = set(addn_receipients or [])
-    sender = None
-    for header in headers:
-        if header["name"].lower() in ["to", "cc"]:
-            recipients.update(header["value"].replace(" ", "").split(","))
-        if header["name"].lower() == "from":
-            sender = header["value"]
-    if sender:
-        recipients.add(sender)  # Ensure the original sender is included in the response
-    for r in list(recipients):
-        if email_address in r:
-            recipients.remove(r)
-    return list(recipients)
-
-
-def send_message(service, user_id, message):
-    message = service.users().messages().send(userId=user_id, body=message).execute()
-    return message
-
-
-def send_email(
-    email_id,
-    response_text,
-    email_address,
-    gmail_token: str | None = None,
-    gmail_secret: str | None = None,
-    addn_receipients=None,
-):
-    creds = get_credentials(gmail_token, gmail_secret)
-
-    service = build("gmail", "v1", credentials=creds)
-    message = service.users().messages().get(userId="me", id=email_id).execute()
-
-    headers = message["payload"]["headers"]
-    message_id = next(
-        header["value"] for header in headers if header["name"].lower() == "message-id"
-    )
-    thread_id = message["threadId"]
-
-    # Get recipients and sender
-    recipients = get_recipients(headers, email_address, addn_receipients)
-
-    # Create the response
-    subject = next(
-        header["value"] for header in headers if header["name"].lower() == "subject"
-    )
-    response_subject = subject
-    response_message = create_message(
-        "me", recipients, response_subject, response_text, thread_id, message_id
-    )
-    # Send the response
-    send_message(service, "me", response_message)
 
 
 def fetch_group_emails(
@@ -271,103 +197,14 @@ def mark_as_read(
     gmail_token: str | None = None,
     gmail_secret: str | None = None,
 ):
+    print(f"\n{'='*50}\n mark_as_read \n{'='*50}\n")
+
     creds = get_credentials(gmail_token, gmail_secret)
 
     service = build("gmail", "v1", credentials=creds)
     service.users().messages().modify(
         userId="me", id=message_id, body={"removeLabelIds": ["UNREAD"]}
     ).execute()
-
-
-class CalInput(BaseModel):
-    date_strs: list[str] = Field(
-        description="The days for which to retrieve events. Each day should be represented by dd-mm-yyyy string."
-    )
-
-
-@tool(args_schema=CalInput)
-def get_events_for_days(date_strs: list[str]):
-    """
-    Retrieves events for a list of days. If you want to check for multiple days, call this with multiple inputs.
-
-    Input in the format of ['dd-mm-yyyy', 'dd-mm-yyyy']
-
-    Args:
-    date_strs: The days for which to retrieve events (dd-mm-yyyy string).
-
-    Returns: availability for those days.
-    """
-
-    creds = get_credentials(None, None)
-    service = build("calendar", "v3", credentials=creds)
-    results = ""
-    for date_str in date_strs:
-        # Convert the date string to a datetime.date object
-        day = datetime.strptime(date_str, "%d-%m-%Y").date()
-
-        start_of_day = datetime.combine(day, time.min).isoformat() + "Z"
-        end_of_day = datetime.combine(day, time.max).isoformat() + "Z"
-
-        events_result = (
-            service.events()
-            .list(
-                calendarId="primary",
-                timeMin=start_of_day,
-                timeMax=end_of_day,
-                singleEvents=True,
-                orderBy="startTime",
-            )
-            .execute()
-        )
-        events = events_result.get("items", [])
-
-        results += f"***FOR DAY {date_str}***\n\n" + print_events(events)
-    return results
-
-
-def format_datetime_with_timezone(dt_str, timezone="US/Pacific"):
-    """
-    Formats a datetime string with the specified timezone.
-
-    Args:
-    dt_str: The datetime string to format.
-    timezone: The timezone to use for formatting.
-
-    Returns:
-    A formatted datetime string with the timezone abbreviation.
-    """
-    dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-    tz = pytz.timezone(timezone)
-    dt = dt.astimezone(tz)
-    return dt.strftime("%Y-%m-%d %I:%M %p %Z")
-
-
-def print_events(events):
-    """
-    Prints the events in a human-readable format.
-
-    Args:
-    events: List of events to print.
-    """
-    if not events:
-        return "No events found for this day."
-
-    result = ""
-
-    for event in events:
-        start = event["start"].get("dateTime", event["start"].get("date"))
-        end = event["end"].get("dateTime", event["end"].get("date"))
-        summary = event.get("summary", "No Title")
-
-        if "T" in start:  # Only format if it's a datetime
-            start = format_datetime_with_timezone(start)
-            end = format_datetime_with_timezone(end)
-
-        result += f"Event: {summary}\n"
-        result += f"Starts: {start}\n"
-        result += f"Ends: {end}\n"
-        result += "-" * 40 + "\n"
-    return result
 
 
 def send_calendar_invite(
@@ -417,3 +254,170 @@ def send_calendar_invite(
     except Exception as e:
         logger.info(f"An error occurred while sending the calendar invite: {e}")
         return False
+
+
+def format_datetime_with_timezone(dt_str, timezone="US/Pacific"):
+    """
+    Formats a datetime string with the specified timezone.
+
+    Args:
+    dt_str: The datetime string to format.
+    timezone: The timezone to use for formatting.
+
+    Returns:
+    A formatted datetime string with the timezone abbreviation.
+    """
+    dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+    tz = pytz.timezone(timezone)
+    dt = dt.astimezone(tz)
+    return dt.strftime("%Y-%m-%d %I:%M %p %Z")
+
+
+def print_events(events):
+    """
+    Prints the events in a human-readable format.
+
+    Args:
+    events: List of events to print.
+    """
+    if not events:
+        return "No events found for this day."
+
+    result = ""
+
+    for event in events:
+        start = event["start"].get("dateTime", event["start"].get("date"))
+        end = event["end"].get("dateTime", event["end"].get("date"))
+        summary = event.get("summary", "No Title")
+
+        if "T" in start:  # Only format if it's a datetime
+            start = format_datetime_with_timezone(start)
+            end = format_datetime_with_timezone(end)
+
+        result += f"Event: {summary}\n"
+        result += f"Starts: {start}\n"
+        result += f"Ends: {end}\n"
+        result += "-" * 40 + "\n"
+    return result
+
+
+class CalInput(BaseModel):
+    date_strs: list[str] = Field(
+        description="The days for which to retrieve events. Each day should be represented by dd-mm-yyyy string."
+    )
+
+
+@tool(args_schema=CalInput)
+def get_events_for_days(date_strs: list[str]):
+    """
+    Retrieves events for a list of days. If you want to check for multiple days, call this with multiple inputs.
+
+    Input in the format of ['dd-mm-yyyy', 'dd-mm-yyyy']
+
+    Args:
+    date_strs: The days for which to retrieve events (dd-mm-yyyy string).
+
+    Returns: availability for those days.
+    """
+
+    creds = get_credentials(None, None)
+    service = build("calendar", "v3", credentials=creds)
+
+    results = ""
+    for date_str in date_strs:
+        # Convert the date string to a datetime.date object
+        day = datetime.strptime(date_str, "%d-%m-%Y").date()
+
+        start_of_day = datetime.combine(day, time.min).isoformat() + "Z"
+        end_of_day = datetime.combine(day, time.max).isoformat() + "Z"
+
+        events_result = (
+            service.events()
+            .list(
+                calendarId="primary",
+                timeMin=start_of_day,
+                timeMax=end_of_day,
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
+        )
+        events = events_result.get("items", [])
+
+        results += f"***FOR DAY {date_str}***\n\n" + print_events(events)
+
+    return results
+
+
+def create_message(sender, to, subject, message_text, thread_id, original_message_id):
+    message = MIMEMultipart()
+    message["to"] = ", ".join(to)
+    message["from"] = sender
+    message["subject"] = subject
+    message["In-Reply-To"] = original_message_id
+    message["References"] = original_message_id
+    message["Message-ID"] = email.utils.make_msgid()
+    msg = MIMEText(message_text)
+    message.attach(msg)
+    raw = base64.urlsafe_b64encode(message.as_bytes())
+    raw = raw.decode()
+    return {"raw": raw, "threadId": thread_id}
+
+
+def get_recipients(
+    headers,
+    email_address,
+    addn_receipients=None,
+):
+    recipients = set(addn_receipients or [])
+    sender = None
+    for header in headers:
+        if header["name"].lower() in ["to", "cc"]:
+            recipients.update(header["value"].replace(" ", "").split(","))
+        if header["name"].lower() == "from":
+            sender = header["value"]
+    if sender:
+        recipients.add(sender)  # Ensure the original sender is included in the response
+    for r in list(recipients):
+        if email_address in r:
+            recipients.remove(r)
+    return list(recipients)
+
+
+def send_message(service, user_id, message):
+    message = service.users().messages().send(userId=user_id, body=message).execute()
+    return message
+
+
+def send_email(
+    email_id,
+    response_text,
+    email_address,
+    gmail_token: str | None = None,
+    gmail_secret: str | None = None,
+    addn_receipients=None,
+):
+    creds = get_credentials(gmail_token, gmail_secret)
+
+    service = build("gmail", "v1", credentials=creds)
+    message = service.users().messages().get(userId="me", id=email_id).execute()
+
+    headers = message["payload"]["headers"]
+    message_id = next(
+        header["value"] for header in headers if header["name"].lower() == "message-id"
+    )
+    thread_id = message["threadId"]
+
+    # Get recipients and sender
+    recipients = get_recipients(headers, email_address, addn_receipients)
+
+    # Create the response
+    subject = next(
+        header["value"] for header in headers if header["name"].lower() == "subject"
+    )
+    response_subject = subject
+    response_message = create_message(
+        "me", recipients, response_subject, response_text, thread_id, message_id
+    )
+    # Send the response
+    send_message(service, "me", response_message)

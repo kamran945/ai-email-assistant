@@ -1,10 +1,11 @@
 """Core agent responsible for drafting email."""
 
 from langchain_core.runnables import RunnableConfig
-from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from langgraph.store.base import BaseStore
+from langgraph.func import task
 
-from eaia.schemas import (
+from src.schemas import (
     State,
     NewEmailDraft,
     ResponseEmailDraft,
@@ -14,7 +15,9 @@ from eaia.schemas import (
     Ignore,
     email_template,
 )
-from eaia.main.config import get_config
+
+# from src.email_assistant.config import get_config
+from src.email_assistant.configuration import Configuration
 
 EMAIL_WRITING_INSTRUCTIONS = """You are {full_name}'s executive assistant. You are a top-notch executive assistant who cares about {name} performing as well as possible.
 
@@ -79,14 +82,18 @@ Here is the email thread. Note that this is the full email thread. Pay special a
 {email}"""
 
 
+# @task(name="draft_response")
 async def draft_response(state: State, config: RunnableConfig, store: BaseStore):
     """Write an email to a customer."""
-    model = config["configurable"].get("model", "gpt-4o")
-    llm = ChatOpenAI(
+    print(f"\n{'='*50}\n draft_response \n{'='*50}\n")
+
+    configuration = Configuration.from_runnable_config(config=config)
+    model = configuration.draft_response_model
+    llm = ChatGroq(
         model=model,
         temperature=0,
         parallel_tool_calls=False,
-        tool_choice="required",
+        # tool_choice="required",
     )
     tools = [
         NewEmailDraft,
@@ -98,15 +105,20 @@ async def draft_response(state: State, config: RunnableConfig, store: BaseStore)
     messages = state.get("messages") or []
     if len(messages) > 0:
         tools.append(Ignore)
-    prompt_config = get_config(config)
+
+    prompt_config = configuration.config_yaml
     namespace = (config["configurable"].get("assistant_id", "default"),)
+
     key = "schedule_preferences"
     result = await store.aget(namespace, key)
     if result and "data" in result.value:
         schedule_preferences = result.value["data"]
     else:
-        await store.aput(namespace, key, {"data": prompt_config["schedule_preferences"]})
+        await store.aput(
+            namespace, key, {"data": prompt_config["schedule_preferences"]}
+        )
         schedule_preferences = prompt_config["schedule_preferences"]
+
     key = "random_preferences"
     result = await store.aget(namespace, key)
     if result and "data" in result.value:
@@ -116,13 +128,17 @@ async def draft_response(state: State, config: RunnableConfig, store: BaseStore)
             namespace, key, {"data": prompt_config["background_preferences"]}
         )
         random_preferences = prompt_config["background_preferences"]
+
     key = "response_preferences"
     result = await store.aget(namespace, key)
     if result and "data" in result.value:
         response_preferences = result.value["data"]
     else:
-        await store.aput(namespace, key, {"data": prompt_config["response_preferences"]})
+        await store.aput(
+            namespace, key, {"data": prompt_config["response_preferences"]}
+        )
         response_preferences = prompt_config["response_preferences"]
+
     _prompt = EMAIL_WRITING_INSTRUCTIONS.format(
         schedule_preferences=schedule_preferences,
         random_preferences=random_preferences,
@@ -141,11 +157,11 @@ async def draft_response(state: State, config: RunnableConfig, store: BaseStore)
         ),
     )
 
-    model = llm.bind_tools(tools)
+    llm_with_tools = llm.bind_tools(tools, tool_choice="any")
     messages = [{"role": "user", "content": input_message}] + messages
     i = 0
     while i < 5:
-        response = await model.ainvoke(messages)
+        response = await llm_with_tools.ainvoke(messages)
         if len(response.tool_calls) != 1:
             i += 1
             messages += [{"role": "user", "content": "Please call a valid tool call."}]

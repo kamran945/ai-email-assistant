@@ -4,13 +4,15 @@ from datetime import datetime
 
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from langgraph.prebuilt import create_react_agent
+from langgraph.func import task
 
-from eaia.gmail import get_events_for_days
-from eaia.schemas import State
+from src.gmail import get_events_for_days
+from src.schemas import State
 
-from eaia.main.config import get_config
+# from src.email_assistant.config import get_config
+from src.email_assistant.configuration import Configuration
 
 meeting_prompts = """You are {full_name}'s executive assistant. You are a top-notch executive assistant who cares about {name} performing as well as possible.
 
@@ -63,13 +65,22 @@ Subject: {subject}
 {email_thread}"""
 
 
+# @task
 async def find_meeting_time(state: State, config: RunnableConfig):
     """Write an email to a customer."""
-    model = config["configurable"].get("model", "gpt-4o")
-    llm = ChatOpenAI(model=model, temperature=0)
+    print(f"\n{'='*50}\n find_meeting_time \n{'='*50}\n")
+
+    configuration = Configuration.from_runnable_config(config=config)
+
+    model = configuration.find_meeting_model
+    llm = ChatGroq(model=model, temperature=0)
+
     agent = create_react_agent(llm, [get_events_for_days])
+
     current_date = datetime.now()
-    prompt_config = get_config(config)
+
+    prompt_config = configuration.config_yaml
+
     input_message = meeting_prompts.format(
         email_thread=state["email"]["page_content"],
         author=state["email"]["from_email"],

@@ -1,9 +1,13 @@
 from langgraph.store.base import BaseStore
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
+from langchain_groq import ChatGroq
+from langchain_core.runnables import RunnableConfig
+
+# from langchain_anthropic import ChatAnthropic
 from typing import TypedDict, Optional
 from langgraph.graph import StateGraph, START, END, MessagesState
 from langgraph.types import Command, Send
+
+from src.email_assistant.configuration import Configuration
 
 TONE_INSTRUCTIONS = "Only update the prompt to include instructions on the **style and tone and format** of the response. Do NOT update the prompt to include anything about the actual content - only the style and tone and format. The user sometimes responds differently to different types of people - take that into account, but don't be too specific."
 RESPONSE_INSTRUCTIONS = "Only update the prompt to include instructions on the **content** of the response. Do NOT update the prompt to include anything about the tone or style or format of the response."
@@ -62,7 +66,10 @@ You should return the full prompt, so if there's anything from before that you w
 
 
 async def update_general(state: ReflectionState, config, store: BaseStore):
-    reflection_model = ChatOpenAI(model="o1", disable_streaming=True)
+
+    configuration = Configuration.from_runnable_config(config=config)
+    reflection_model_name = configuration.reflection_model
+    reflection_model = ChatGroq(model=reflection_model_name, disable_streaming=True)
     # reflection_model = ChatAnthropic(model="claude-3-5-sonnet-latest")
     namespace = (state["assistant_key"],)
     key = state["prompt_key"]
@@ -88,10 +95,7 @@ async def update_general(state: ReflectionState, config, store: BaseStore):
         state["instructions"],
     )
     if output["update_prompt"]:
-        await store.aput(
-            namespace, key, {"data": output["new_prompt"]}, index=False
-        )
-
+        await store.aput(namespace, key, {"data": output["new_prompt"]}, index=False)
 
 
 general_reflection_graph = StateGraph(ReflectionState)
@@ -147,9 +151,13 @@ class MultiMemoryInput(MessagesState):
     assistant_key: str
 
 
-async def determine_what_to_update(state: MultiMemoryInput):
-    reflection_model = ChatOpenAI(model="gpt-4o", disable_streaming=True)
-    reflection_model = ChatAnthropic(model="claude-3-5-sonnet-latest")
+async def determine_what_to_update(state: MultiMemoryInput, config: RunnableConfig):
+
+    configuration = Configuration.from_runnable_config(config=config)
+    reflection_model_name = configuration.reflection_model
+    reflection_model = ChatGroq(model=reflection_model_name, disable_streaming=True)
+    # reflection_model = ChatOpenAI(model="gpt-4o", disable_streaming=True)
+    # reflection_model = ChatAnthropic(model="claude-3-5-sonnet-latest")
     trajectory = get_trajectory_clean(state["messages"])
     types_of_prompts = "\n".join(
         [f"`{p_type}`: {MEMORY_TO_UPDATE[p_type]}" for p_type in state["prompt_types"]]
@@ -164,6 +172,8 @@ async def determine_what_to_update(state: MultiMemoryInput):
         memory_types_to_update: list[str]
 
     response = reflection_model.with_structured_output(MemoryToUpdate).invoke(prompt)
+    print("---- Memory To Update ----")
+    print(response)
     sends = []
     for t in response["memory_types_to_update"]:
         _state = {

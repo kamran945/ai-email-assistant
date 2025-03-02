@@ -1,7 +1,7 @@
 """Fetches few shot examples for triage step."""
 
 from langgraph.store.base import BaseStore
-from eaia.schemas import EmailData
+from src.schemas import EmailData
 
 
 template = """Email Subject: {subject}

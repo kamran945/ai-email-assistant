@@ -1,5 +1,5 @@
 from typing import Annotated, List, Literal
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from langgraph.graph.message import AnyMessage
 from typing_extensions import TypedDict
 
@@ -22,6 +22,24 @@ class RespondTo(BaseModel):
         description="logic on WHY the response choice is the way it is", default=""
     )
     response: Literal["no", "email", "notify", "question"] = "no"
+
+
+class TriageInput(TypedDict):
+    emails: List[EmailData]
+
+
+# Needed to mix Pydantic with TypedDict
+def convert_obj(o, m):
+    if isinstance(m, dict):
+        return RespondTo(**m)
+    else:
+        return m
+
+
+class State(TypedDict):
+    email: EmailData
+    triage: Annotated[RespondTo, convert_obj]
+    messages: Annotated[List[AnyMessage], add_messages]
 
 
 class ResponseEmailDraft(BaseModel):
@@ -78,20 +96,6 @@ class SendCalendarInvite(BaseModel):
     end_time: str = Field(
         description="End time for the meeting, should be in `2024-07-01T14:00:00` format"
     )
-
-
-# Needed to mix Pydantic with TypedDict
-def convert_obj(o, m):
-    if isinstance(m, dict):
-        return RespondTo(**m)
-    else:
-        return m
-
-
-class State(TypedDict):
-    email: EmailData
-    triage: Annotated[RespondTo, convert_obj]
-    messages: Annotated[List[AnyMessage], add_messages]
 
 
 email_template = """From: {author}

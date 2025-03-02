@@ -1,28 +1,29 @@
 """Overall agent."""
+
 import json
 from typing import TypedDict, Literal
 from langgraph.graph import END, StateGraph
 from langchain_core.messages import HumanMessage
-from eaia.main.triage import (
+from src.email_assistant.triage_task import (
     triage_input,
 )
-from eaia.main.draft_response import draft_response
-from eaia.main.find_meeting_time import find_meeting_time
-from eaia.main.rewrite import rewrite
-from eaia.main.config import get_config
+from src.email_assistant.draft_response import draft_response
+from src.email_assistant.find_meeting_time import find_meeting_time
+from src.email_assistant.rewrite_email import rewrite
+from src.email_assistant.config import get_config
 from langchain_core.messages import ToolMessage
-from eaia.main.human_inbox import (
+from src.email_assistant.human_inbox import (
     send_message,
     send_email_draft,
     notify,
     send_cal_invite,
 )
-from eaia.gmail import (
+from src.gmail import (
     send_email,
     mark_as_read,
     send_calendar_invite,
 )
-from eaia.schemas import (
+from src.schemas import (
     State,
 )
 
@@ -186,4 +187,4 @@ graph_builder.add_edge("send_email_draft", "human_node")
 graph_builder.add_edge("mark_as_read_node", END)
 graph_builder.add_edge("notify", "human_node")
 graph_builder.add_conditional_edges("human_node", enter_after_human)
-graph = graph_builder.compile()
+email_assistant_workflow = graph_builder.compile()
